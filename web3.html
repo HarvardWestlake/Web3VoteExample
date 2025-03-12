@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Class Voting System</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .container {
+      background-color: #f9f9f9;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+    .section {
+      margin-bottom: 20px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid #eee;
+    }
+    button {
+      background-color: #4CAF50;
+      border: none;
+      color: white;
+      padding: 10px 15px;
+      text-align: center;
+      text-decoration: none;
+      display: inline-block;
+      font-size: 14px;
+      margin: 4px 2px;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    button:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
+    input, textarea, select {
+      width: 100%;
+      padding: 8px;
+      margin: 8px 0;
+      display: inline-block;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+    .status {
+      font-weight: bold;
+      color: #555;
+    }
+    .proposal {
+      background-color: white;
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 4px;
+      border: 1px solid #ddd;
+    }
+    .active {
+      border-left: 4px solid #4CAF50;
+    }
+    .completed {
+      border-left: 4px solid #3498db;
+    }
+    .cooldown {
+      color: #d35400;
+      font-weight: bold;
+      margin-top: 10px;
+      padding: 5px;
+      background-color: #fff3e0;
+      border-radius: 4px;
+    }
+    
+    #ownerTransferSection {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px dashed #ccc;
+    }
+    
+    .vote-options {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      margin: 10px 0;
+    }
+    
+    .vote-option {
+      display: flex;
+      align-items: center;
+      padding: 5px;
+      border-radius: 4px;
+      background-color: #f5f5f5;
+    }
+    
+    .vote-option-label {
+      min-width: 100px;
+      font-weight: bold;
+    }
+    
+    .vote-bar {
+      height: 20px;
+      background-color: #4CAF50;
+      border-radius: 2px;
+      min-width: 5px;
+      margin-right: 5px;
+    }
+    
+    .winner {
+      color: #4CAF50;
+      font-weight: bold;
+    }
+    
+    .check-winner-btn {
+      background-color: #3498db;
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Class Voting System</h1>
+  
+  <div class="container">
+    <div class="section">
+      <h2>Connection</h2>
+      <p>Status: <span id="status" class="status">Disconnected</span></p>
+      <p>Account: <span id="account">Not connected</span></p>
+      <p>Role: <span id="role">Unknown</span></p>
+      <button id="connectButton">Connect Wallet</button>
+    </div>
+
+    <div id="ownerSection" style="display:none" class="section">
+      <h2>Instructor Controls</h2>
+      
+      <div>
+        <h3>Create Proposal</h3>
+        <textarea id="proposalDescription" rows="4" placeholder="Enter your proposal question (e.g., 'Which homework assignment do you want?'). Options will be numbered 1-10 automatically."></textarea>
+        <button id="submitProposalButton">Submit Proposal</button>
+      </div>
+      
+      <div>
+        <h3>Manage Voting</h3>
+        <select id="proposalSelector">
+          <option value="">Select a proposal</option>
+        </select>
+        <button id="startVotingButton">Start Voting</button>
+        <button id="stopVotingButton">Stop Voting</button>
+      </div>
+      
+      <div>
+        <h3>Manage Voters</h3>
+        <input id="voterAddress" type="text" placeholder="Enter wallet address to whitelist">
+        <button id="addVoterButton">Add Voter</button>
+        <textarea id="multipleVoters" rows="4" placeholder="Enter multiple addresses (one per line, max 30)"></textarea>
+        <button id="addMultipleVotersButton">Add Multiple Voters</button>
+      </div>
+    </div>
+
+    <div id="voterSection" style="display:none" class="section">
+      <h2>Student Voting</h2>
+      <div id="activeProposal" class="proposal">
+        <p>No active proposal</p>
+      </div>
+      <div id="voteOptionsContainer" style="display:none">
+        <h3>Cast Your Vote:</h3>
+        <select id="voteOptionSelect">
+          <option value="">Select an option</option>
+          <option value="1">Option 1</option>
+          <option value="2">Option 2</option>
+          <option value="3">Option 3</option>
+          <option value="4">Option 4</option>
+          <option value="5">Option 5</option>
+          <option value="6">Option 6</option>
+          <option value="7">Option 7</option>
+          <option value="8">Option 8</option>
+          <option value="9">Option 9</option>
+          <option value="10">Option 10</option>
+        </select>
+        <button id="voteButton" disabled>Vote</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Proposals</h2>
+      <button id="refreshProposalsButton">Refresh Proposals</button>
+      <div id="proposalsList">
+        <p>No proposals yet</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Load Latest Ethers.js v6 from CDN -->
+  <script src="ethers.min.js" type="application/javascript"></script>
+  <script>
+    // Contract details
+    let contractAddress = "0x7526fd3d0B82e6167BC5Ea0763106ad21B34d9e7"; // Updated contract address
+    const contractOwner = "0xCcD83cb05aAaf714289b226eC437B2Cf0C9f3a89";
+    
+    // Variables for contract interaction
+    let provider, signer, contract;
+    let userAddress = null;
+    let isOwner = false;
+    let abi = null;
+    
+    // DOM Elements
+    const connectButton = document.getElementById('connectButton');
+    const statusElement = document.getElementById('status');
+    const accountElement = document.getElementById('account');
+    const roleElement = document.getElementById('role');
+    const ownerSection = document.getElementById('ownerSection');
+    const voterSection = document.getElementById('voterSection');
+    const proposalDescription = document.getElementById('proposalDescription');
+    const submitProposalButton = document.getElementById('submitProposalButton');
+    const proposalSelector = document.getElementById('proposalSelector');
+    const startVotingButton = document.getElementById('startVotingButton');
+    const stopVotingButton = document.getElementById('stopVotingButton');
+    const voterAddress = document.getElementById('voterAddress');
+    const addVoterButton = document.getElementById('addVoterButton');
+    const multipleVoters = document.getElementById('multipleVoters');
+    const addMultipleVotersButton = document.getElementById('addMultipleVotersButton');
+    const activeProposal = document.getElementById('activeProposal');
+    const voteButton = document.getElementById('voteButton');
+    const voteOptionSelect = document.getElementById('voteOptionSelect');
+    const voteOptionsContainer = document.getElementById('voteOptionsContainer');
+    const proposalsList = document.getElementById('proposalsList');
+    const refreshProposalsButton = document.getElementById('refreshProposalsButton');
+    
+    // Load ABI from external file
+    async function loadABI() {
+      try {
+        statusElement.innerText = "Loading contract ABI...";
+        const response = await fetch('./contract/abi.json');
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        
+        abi = await response.json();
+        statusElement.innerText = "Contract ABI loaded successfully";
+        
+        // Enable connect button once ABI is loaded
+        connectButton.disabled = false;
+      } catch (error) {
+        console.error("Error loading ABI:", error);
+        statusElement.innerText = "Error loading ABI: " + error.message;
+      }
+    }
+    
+    // Initialize the page
+    async function init() {
+      connectButton.disabled = true;
+      statusElement.innerText = "Initializing...";
+      await loadABI();
+    }
+    
+    // Helper to format votes array into a nice HTML display
+    function formatVotesDisplay(votes, proposalId, isActive) {
+      let totalVotes = 0;
+      for (let i = 0; i < votes.length; i++) {
+        totalVotes += parseInt(votes[i].toString());
+      }
+      
+      let html = `<div class="vote-options">`;
+      
+      for (let i = 0; i < votes.length; i++) {
+        const voteCount = parseInt(votes[i].toString());
+        if (voteCount === 0 && totalVotes === 0) continue; // Skip options with 0 votes when no votes cast
+        
+        const percentage = totalVotes > 0 ? (voteCount / totalVotes) * 100 : 0;
+        const width = percentage > 0 ? percentage : 1; // Min 1% width for visibility
+        
+        html += `
+          <div class="vote-option">
+            <div class="vote-option-label">Option ${i+1}:</div>
+            <div class="vote-bar" style="width: ${width}%"></div>
+            <div>${voteCount} votes (${percentage.toFixed(1)}%)</div>
+          </div>
+        `;
+      }
+      
+      html += `</div>`;
+      
+      // Add check winner button for completed proposals
+      if (!isActive && totalVotes > 0) {
+        html += `<button class="check-winner-btn" onclick="checkWinner(${proposalId})">Check Winner</button>`;
+      }
+      
+      return html;
+    }
+    
+    // Add event listeners
+    connectButton.addEventListener('click', connectWallet);
+    submitProposalButton.addEventListener('click', submitProposal);
+    startVotingButton.addEventListener('click', startVoting);
+    stopVotingButton.addEventListener('click', stopVoting);
+    addVoterButton.addEventListener('click', addVoter);
+    addMultipleVotersButton.addEventListener('click', addMultipleVoters);
+    voteButton.addEventListener('click', vote);
+    refreshProposalsButton.addEventListener('click', loadProposals);
+
+    // Connect to wallet
+    async function connectWallet() {
+      try {
+        if (!abi) {
+          alert("Contract ABI not loaded. Please refresh the page and try again.");
+          return;
+        }
+        
+        // Check if MetaMask is installed
+        if (window.ethereum == null) {
+          statusElement.innerText = "MetaMask not installed; using read-only defaults";
+          // If MetaMask is not installed, we use the default provider
+          provider = ethers.getDefaultProvider();
+          contract = new ethers.Contract(contractAddress, abi, provider);
+        } else {
+          // Connect to MetaMask
+          provider = new ethers.BrowserProvider(window.ethereum);
+          
+          // Request account access
+          await provider.send("eth_requestAccounts", []);
+          
+          // Get the signer
+          signer = await provider.getSigner();
+          userAddress = await signer.getAddress();
+          
+          // Create contract instance with write access
+          contract = new ethers.Contract(contractAddress, abi, signer);
+          
+          // Verify the contract exists
+          try {
+            // Try to call a view function to check if contract exists
+            statusElement.innerText = "Verifying contract...";
+            const code = await provider.getCode(contractAddress);
+            
+            if (code === '0x' || code === '0x0') {
+              throw new Error("No contract deployed at the specified address. Please check your contract address.");
+            }
+            
+            // Check if user is the owner
+            const ownerAddress = await contract.owner();
+            isOwner = (ownerAddress.toLowerCase() === userAddress.toLowerCase());
+            
+            // Update UI
+            statusElement.innerText = "Connected";
+            accountElement.innerText = userAddress;
+            roleElement.innerText = isOwner ? "Instructor (Owner)" : "Student";
+            
+            // Show appropriate sections
+            ownerSection.style.display = isOwner ? "block" : "none";
+            voterSection.style.display = !isOwner ? "block" : "none";
+            
+            // Add owner transfer section if owner
+            if (isOwner && !document.getElementById('ownerTransferSection')) {
+              const ownerTransferHTML = `
+                <div>
+                  <h3>Transfer Ownership</h3>
+                  <input id="newOwnerAddress" type="text" placeholder="Enter new owner address">
+                  <button id="transferOwnershipButton">Transfer Ownership</button>
+                </div>
+              `;
+              const div = document.createElement('div');
+              div.id = 'ownerTransferSection';
+              div.innerHTML = ownerTransferHTML;
+              ownerSection.appendChild(div);
+              
+              // Add event listener for the new button
+              document.getElementById('transferOwnershipButton').addEventListener('click', transferOwnership);
+            }
+            
+            // Load proposals
+            await loadProposals();
+            
+            // Check if user is whitelisted for voting
+            if (!isOwner) {
+              const isWhitelisted = await contract.whitelist(userAddress);
+              
+              // Check voting cooldown
+              if (isWhitelisted) {
+                const lastVoteTime = await contract.getLastVoteTime(userAddress);
+                const currentTime = Math.floor(Date.now() / 1000); // Current time in seconds
+                const sevenDays = 7 * 24 * 60 * 60; // 7 days in seconds
+                
+                const canVoteNow = lastVoteTime.toString() === "0" || 
+                                  currentTime >= parseInt(lastVoteTime.toString()) + sevenDays;
+                
+                voteButton.disabled = !canVoteNow;
+                
+                if (!canVoteNow) {
+                  const nextVoteTime = new Date((parseInt(lastVoteTime.toString()) + sevenDays) * 1000);
+                  activeProposal.innerHTML += `<p class="cooldown">You can vote again after: ${nextVoteTime.toLocaleString()}</p>`;
+                }
+              } else {
+                voteButton.disabled = true;
+                activeProposal.innerHTML = "<p>You are not whitelisted to vote. Please contact your instructor.</p>";
+              }
+              
+              await checkActiveProposal();
+            }
+          } catch (contractError) {
+            console.error("Contract verification error:", contractError);
+            statusElement.innerText = "Contract error: " + contractError.message;
+            alert("There was an issue with the contract: " + contractError.message);
+          }
+        }
+      } catch (error) {
+        console.error("Connection error:", error);
+        statusElement.innerText = "Connection failed: " + error.message;
+      }
+    }
+    
+    // Transfer ownership (owner only)
+    async function transferOwnership() {
+      if (!isOwner) {
+        alert("Only the current owner can transfer ownership");
+        return;
+      }
+      
+      const newOwnerAddress = document.getElementById('newOwnerAddress').value.trim();
+      if (!newOwnerAddress || !ethers.isAddress(newOwnerAddress)) {
+        alert("Please enter a valid Ethereum address");
+        return;
+      }
+      
+      try {
+        statusElement.innerText = "Transferring ownership...";
+        const tx = await contract.changeOwner(newOwnerAddress);
+        await tx.wait();
+        statusElement.innerText = "Ownership transferred successfully!";
+        alert(`Ownership transferred to ${newOwnerAddress}. You will no longer have owner privileges after page refresh.`);
+        document.getElementById('newOwnerAddress').value = "";
+      } catch (error) {
+        console.error("Error transferring ownership:", error);
+        statusElement.innerText = "Error transferring ownership: " + error.message;
+      }
+    }
+    
+    // Load all proposals
+    async function loadProposals() {
+      if (!contract) {
+        alert("Please connect your wallet first");
+        return;
+      }
+      
+      try {
+        // Clear existing proposals first
+        proposalsList.innerHTML = "<p>Loading proposals...</p>";
+        proposalSelector.innerHTML = "<option value=''>Select a proposal</option>";
+        
+        // Try to get proposal count with error handling
+        let count;
+        try {
+          count = await contract.proposalCount();
+        } catch (countError) {
+          console.error("Error getting proposal count:", countError);
+          
+          // Handle missing or incorrect contract
+          if (countError.message.includes("BAD_DATA") || 
+              countError.message.includes("could not decode result data")) {
+            proposalsList.innerHTML = "<p>Error: Could not connect to the contract. Please check if:</p>" + 
+                                     "<ul>" +
+                                     "<li>The contract address is correct</li>" +
+                                     "<li>The contract is deployed on the current network</li>" +
+                                     "<li>You're connected to the correct network</li>" +
+                                     "</ul>";
+            statusElement.innerText = "Contract connection error";
+            return;
+          }
+          
+          throw countError;
+        }
+        
+        let activeId;
+        try {
+          activeId = await contract.activeProposalId();
+        } catch (error) {
+          console.error("Error getting active proposal ID:", error);
+          activeId = 0;
+        }
+        
+        if (count.toString() === "0") {
+          proposalsList.innerHTML = "<p>No proposals yet</p>";
+          return;
+        }
+        
+        // Loading message while we fetch proposals
+        proposalsList.innerHTML = "";
+        
+        // For non-owners, only show the active proposal if there is one
+        if (!isOwner && activeId.toString() !== "0") {
+          try {
+            const proposal = await contract.proposals(activeId);
+            const isActive = proposal[2]; // active status
+            
+            if (isActive) {
+              // Only show active proposal for regular users
+              const proposalDiv = document.createElement('div');
+              proposalDiv.className = `proposal active`;
+              proposalDiv.innerHTML = `
+                <h3>Current Vote: Proposal #${activeId}</h3>
+                <p>${proposal[0]}</p>
+                ${formatVotesDisplay(proposal[1], activeId, true)}
+              `;
+              proposalsList.appendChild(proposalDiv);
+            } else {
+              proposalsList.innerHTML = "<p>No active proposals to vote on at the moment</p>";
+            }
+          } catch (error) {
+            console.error(`Error loading active proposal:`, error);
+            proposalsList.innerHTML = "<p>Error loading active proposal</p>";
+          }
+        } 
+        // For owners, show all proposals
+        else if (isOwner) {
+          // Load each proposal
+          for (let i = 0; i < count; i++) {
+            try {
+              const proposal = await contract.proposals(i);
+              const isActive = proposal[2]; // active status
+              
+              // Add to proposals list
+              const proposalDiv = document.createElement('div');
+              proposalDiv.className = `proposal ${isActive ? 'active' : 'completed'}`;
+              proposalDiv.innerHTML = `
+                <h3>Proposal #${i}</h3>
+                <p>${proposal[0]}</p>
+                ${formatVotesDisplay(proposal[1], i, isActive)}
+                <p>Status: ${isActive ? 'Active' : 'Inactive'}</p>
+              `;
+              proposalsList.appendChild(proposalDiv);
+              
+              // Add to selector dropdown (for owner)
+              const option = document.createElement('option');
+              option.value = i;
+              option.textContent = `Proposal #${i}: ${proposal[0].substring(0, 30)}${proposal[0].length > 30 ? '...' : ''}`;
+              if (isActive) {
+                option.textContent += " (Active)";
+              }
+              proposalSelector.appendChild(option);
+            } catch (error) {
+              console.error(`Error loading proposal ${i}:`, error);
+              const proposalDiv = document.createElement('div');
+              proposalDiv.className = 'proposal';
+              proposalDiv.innerHTML = `<h3>Proposal #${i}</h3><p>Error loading proposal details</p>`;
+              proposalsList.appendChild(proposalDiv);
+            }
+          }
+        } else {
+          // No active proposals for non-owners
+          proposalsList.innerHTML = "<p>No active proposals to vote on at the moment</p>";
+        }
+        
+        // Check active proposal for voters
+        if (!isOwner) {
+          await checkActiveProposal();
+        }
+      } catch (error) {
+        console.error("Error loading proposals:", error);
+        proposalsList.innerHTML = `<p>Error loading proposals: ${error.message}</p>`;
+        statusElement.innerText = `Error: ${error.message}`;
+      }
+    }
+    
+    // Check winner for a proposal
+    async function checkWinner(proposalId) {
+      try {
+        statusElement.innerText = "Checking winner...";
+        const [winningOption, voteCount] = await contract.checkWinnerForProposal(proposalId);
+        
+        // Find the proposal div to update
+        const proposals = document.querySelectorAll('.proposal');
+        for (let i = 0; i < proposals.length; i++) {
+          const heading = proposals[i].querySelector('h3');
+          if (heading && heading.textContent.includes(`Proposal #${proposalId}`)) {
+            // Find all vote option divs
+            const voteOptions = proposals[i].querySelectorAll('.vote-option');
+            
+            // Remove any existing winner classes
+            voteOptions.forEach(option => {
+              option.classList.remove('winner');
+            });
+            
+            // Add winner class to the winning option if it exists
+            if (winningOption > 0 && voteOptions.length >= winningOption) {
+              voteOptions[winningOption-1].classList.add('winner');
+              voteOptions[winningOption-1].innerHTML += ` <span class="winner">WINNER! (${voteCount} votes)</span>`;
+            }
+            
+            break;
+          }
+        }
+        
+        statusElement.innerText = `Winner checked: Option ${winningOption} with ${voteCount} votes`;
+      } catch (error) {
+        console.error("Error checking winner:", error);
+        statusElement.innerText = "Error checking winner: " + error.message;
+      }
+    }
+    
+    // Check active proposal
+    async function checkActiveProposal() {
+      try {
+        const activeId = await contract.activeProposalId();
+        
+        if (activeId.toString() === "0" && (await contract.proposalCount()).toString() === "0") {
+          activeProposal.innerHTML = "<p>No active proposal</p>";
+          voteOptionsContainer.style.display = "none";
+          voteButton.disabled = true;
+          return;
+        }
+        
+        // Get active proposal details
+        const [description, votes, isActive] = await contract.getActiveProposal();
+        
+        if (!isActive) {
+          activeProposal.innerHTML = "<p>No active proposal at the moment</p>";
+          voteOptionsContainer.style.display = "none";
+          voteButton.disabled = true;
+          return;
+        }
+        
+        activeProposal.innerHTML = `
+          <h3>Current Vote:</h3>
+          <p>${description}</p>
+          ${formatVotesDisplay(votes, activeId, true)}
+        `;
+        
+        // Show voting options
+        voteOptionsContainer.style.display = "block";
+        
+        // Check if user is whitelisted and not in cooldown
+        if (userAddress) {
+          const isWhitelisted = await contract.whitelist(userAddress);
+          if (isWhitelisted) {
+            // Check voting cooldown
+            const lastVoteTime = await contract.getLastVoteTime(userAddress);
+            const currentTime = Math.floor(Date.now() / 1000); // Current time in seconds
+            const sevenDays = 7 * 24 * 60 * 60; // 7 days in seconds
+            
+            const canVoteNow = lastVoteTime.toString() === "0" || 
+                               currentTime >= parseInt(lastVoteTime.toString()) + sevenDays;
+            
+            voteButton.disabled = !canVoteNow || voteOptionSelect.value === "";
+            
+            if (!canVoteNow) {
+              const nextVoteTime = new Date((parseInt(lastVoteTime.toString()) + sevenDays) * 1000);
+              activeProposal.innerHTML += `<p class="cooldown">You can vote again after: ${nextVoteTime.toLocaleString()}</p>`;
+            }
+          } else {
+            voteButton.disabled = true;
+            activeProposal.innerHTML += "<p>You are not whitelisted to vote. Please contact your instructor.</p>";
+          }
+        }
+      } catch (error) {
+        console.error("Error checking active proposal:", error);
+        activeProposal.innerHTML = "<p>Error checking active proposal</p>";
+        voteOptionsContainer.style.display = "none";
+      }
+    }
+    
+    // Enable/disable vote button based on option selection
+    voteOptionSelect.addEventListener('change', function() {
+      voteButton.disabled = voteOptionSelect.value === "";
+    });
+    
+    // Submit a new proposal (owner only)
+    async function submitProposal() {
+      if (!isOwner) {
+        alert("Only the instructor can submit proposals");
+        return;
+      }
+      
+      const description = proposalDescription.value.trim();
+      if (!description) {
+        alert("Please enter a proposal description");
+        return;
+      }
+      
+      try {
+        statusElement.innerText = "Submitting proposal...";
+        const tx = await contract.submitProposal(description);
+        await tx.wait();
+        statusElement.innerText = "Proposal submitted successfully!";
+        proposalDescription.value = "";
+        
+        // Reload proposals
+        await loadProposals();
+      } catch (error) {
+        console.error("Error submitting proposal:", error);
+        statusElement.innerText = "Error submitting proposal: " + error.message;
+      }
+    }
+    
+    // Start voting on a proposal (owner only)
+    async function startVoting() {
+      if (!isOwner) {
+        alert("Only the instructor can start voting");
+        return;
+      }
+      
+      const proposalId = proposalSelector.value;
+      if (!proposalId) {
+        alert("Please select a proposal");
+        return;
+      }
+      
+      try {
+        statusElement.innerText = "Starting voting...";
+        const tx = await contract.startVoting(proposalId);
+        await tx.wait();
+        statusElement.innerText = "Voting started successfully!";
+        
+        // Reload proposals
+        await loadProposals();
+      } catch (error) {
+        console.error("Error starting voting:", error);
+        statusElement.innerText = "Error starting voting: " + error.message;
+      }
+    }
+    
+    // Stop voting (owner only)
+    async function stopVoting() {
+      if (!isOwner) {
+        alert("Only the instructor can stop voting");
+        return;
+      }
+      
+      try {
+        statusElement.innerText = "Stopping voting...";
+        const tx = await contract.stopVoting();
+        await tx.wait();
+        statusElement.innerText = "Voting stopped successfully!";
+        
+        // Reload proposals
+        await loadProposals();
+      } catch (error) {
+        console.error("Error stopping voting:", error);
+        statusElement.innerText = "Error stopping voting: " + error.message;
+      }
+    }
+    
+    // Add a single voter (owner only)
+    async function addVoter() {
+      if (!isOwner) {
+        alert("Only the instructor can add voters");
+        return;
+      }
+      
+      const address = voterAddress.value.trim();
+      if (!address || !ethers.isAddress(address)) {
+        alert("Please enter a valid Ethereum address");
+        return;
+      }
+      
+      try {
+        statusElement.innerText = "Adding voter...";
+        const tx = await contract.addVoter(address);
+        await tx.wait();
+        statusElement.innerText = "Voter added successfully!";
+        voterAddress.value = "";
+      } catch (error) {
+        console.error("Error adding voter:", error);
+        statusElement.innerText = "Error adding voter: " + error.message;
+      }
+    }
+    
+    // Add multiple voters (owner only)
+    async function addMultipleVoters() {
+      if (!isOwner) {
+        alert("Only the instructor can add voters");
+        return;
+      }
+      
+      const addresses = multipleVoters.value.trim().split('\n');
+      const validAddresses = [];
+      
+      for (const address of addresses) {
+        const trimmedAddress = address.trim();
+        if (trimmedAddress && ethers.isAddress(trimmedAddress)) {
+          validAddresses.push(trimmedAddress);
+        }
+      }
+      
+      if (validAddresses.length === 0) {
+        alert("Please enter at least one valid Ethereum address");
+        return;
+      }
+      
+      if (validAddresses.length > 30) {
+        alert("You can only add up to 30 addresses at once");
+        return;
+      }
+      
+      // Pad array to 30 elements with zero address if needed
+      while (validAddresses.length < 30) {
+        validAddresses.push("0x0000000000000000000000000000000000000000");
+      }
+      
+      try {
+        statusElement.innerText = "Adding voters...";
+        const tx = await contract.addVoters(validAddresses);
+        await tx.wait();
+        statusElement.innerText = `${validAddresses.length} voters added successfully!`;
+        multipleVoters.value = "";
+      } catch (error) {
+        console.error("Error adding voters:", error);
+        statusElement.innerText = "Error adding voters: " + error.message;
+      }
+    }
+    
+    // Vote on active proposal
+    async function vote() {
+      if (!contract) {
+        alert("Please connect your wallet first");
+        return;
+      }
+      
+      const selectedOption = voteOptionSelect.value;
+      if (!selectedOption) {
+        alert("Please select an option to vote for");
+        return;
+      }
+      
+      try {
+        // Check if user is whitelisted
+        const isWhitelisted = await contract.whitelist(userAddress);
+        if (!isWhitelisted) {
+          alert("You are not whitelisted to vote");
+          return;
+        }
+        
+        // Check cooldown period
+        const lastVoteTime = await contract.getLastVoteTime(userAddress);
+        const currentTime = Math.floor(Date.now() / 1000); // Current time in seconds
+        const sevenDays = 7 * 24 * 60 * 60; // 7 days in seconds
+        
+        if (lastVoteTime.toString() !== "0" && currentTime < parseInt(lastVoteTime.toString()) + sevenDays) {
+          const nextVoteTime = new Date((parseInt(lastVoteTime.toString()) + sevenDays) * 1000);
+          alert(`You can only vote once every 7 days. You can vote again after: ${nextVoteTime.toLocaleString()}`);
+          return;
+        }
+        
+        statusElement.innerText = "Submitting vote...";
+        const tx = await contract.vote(parseInt(selectedOption));
+        await tx.wait();
+        statusElement.innerText = "Vote submitted successfully for option " + selectedOption + "!";
+        
+        // Clear selection
+        voteOptionSelect.value = "";
+        voteButton.disabled = true;
+        
+        // Reload active proposal
+        await checkActiveProposal();
+        await loadProposals();
+      } catch (error) {
+        console.error("Error voting:", error);
+        statusElement.innerText = "Error voting: " + error.message;
+      }
+    }
+    
+    // Make the checkWinner function globally available
+    window.checkWinner = checkWinner;
+    
+    // Initialize the application
+    init();
+  </script>
+</body>
+</html>

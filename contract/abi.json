@@ -1,0 +1,457 @@
+[
+    {
+        "type": "event",
+        "name": "ProposalSubmitted",
+        "inputs": [
+            {
+                "name": "id",
+                "type": "uint256",
+                "components": null,
+                "internalType": null,
+                "indexed": false
+            },
+            {
+                "name": "description",
+                "type": "string",
+                "components": null,
+                "internalType": null,
+                "indexed": false
+            }
+        ],
+        "anonymous": false
+    },
+    {
+        "type": "event",
+        "name": "VotingStarted",
+        "inputs": [
+            {
+                "name": "id",
+                "type": "uint256",
+                "components": null,
+                "internalType": null,
+                "indexed": false
+            }
+        ],
+        "anonymous": false
+    },
+    {
+        "type": "event",
+        "name": "VotingStopped",
+        "inputs": [
+            {
+                "name": "id",
+                "type": "uint256",
+                "components": null,
+                "internalType": null,
+                "indexed": false
+            }
+        ],
+        "anonymous": false
+    },
+    {
+        "type": "event",
+        "name": "VoterAdded",
+        "inputs": [
+            {
+                "name": "voter",
+                "type": "address",
+                "components": null,
+                "internalType": null,
+                "indexed": false
+            }
+        ],
+        "anonymous": false
+    },
+    {
+        "type": "event",
+        "name": "VotersAdded",
+        "inputs": [
+            {
+                "name": "count",
+                "type": "uint256",
+                "components": null,
+                "internalType": null,
+                "indexed": false
+            }
+        ],
+        "anonymous": false
+    },
+    {
+        "type": "event",
+        "name": "WhitelistReset",
+        "inputs": [
+            {
+                "name": "resetBy",
+                "type": "address",
+                "components": null,
+                "internalType": null,
+                "indexed": false
+            }
+        ],
+        "anonymous": false
+    },
+    {
+        "type": "event",
+        "name": "Voted",
+        "inputs": [
+            {
+                "name": "voter",
+                "type": "address",
+                "components": null,
+                "internalType": null,
+                "indexed": false
+            },
+            {
+                "name": "proposalId",
+                "type": "uint256",
+                "components": null,
+                "internalType": null,
+                "indexed": false
+            },
+            {
+                "name": "choice",
+                "type": "uint256",
+                "components": null,
+                "internalType": null,
+                "indexed": false
+            },
+            {
+                "name": "timestamp",
+                "type": "uint256",
+                "components": null,
+                "internalType": null,
+                "indexed": false
+            }
+        ],
+        "anonymous": false
+    },
+    {
+        "type": "event",
+        "name": "OwnershipTransferred",
+        "inputs": [
+            {
+                "name": "previousOwner",
+                "type": "address",
+                "components": null,
+                "internalType": null,
+                "indexed": false
+            },
+            {
+                "name": "newOwner",
+                "type": "address",
+                "components": null,
+                "internalType": null,
+                "indexed": false
+            }
+        ],
+        "anonymous": false
+    },
+    {
+        "type": "function",
+        "name": "submitProposal",
+        "stateMutability": "nonpayable",
+        "inputs": [
+            {
+                "name": "description",
+                "type": "string",
+                "components": null,
+                "internalType": null
+            }
+        ],
+        "outputs": []
+    },
+    {
+        "type": "function",
+        "name": "startVoting",
+        "stateMutability": "nonpayable",
+        "inputs": [
+            {
+                "name": "proposalId",
+                "type": "uint256",
+                "components": null,
+                "internalType": null
+            }
+        ],
+        "outputs": []
+    },
+    {
+        "type": "function",
+        "name": "stopVoting",
+        "stateMutability": "nonpayable",
+        "inputs": [],
+        "outputs": []
+    },
+    {
+        "type": "function",
+        "name": "addVoter",
+        "stateMutability": "nonpayable",
+        "inputs": [
+            {
+                "name": "voter",
+                "type": "address",
+                "components": null,
+                "internalType": null
+            }
+        ],
+        "outputs": []
+    },
+    {
+        "type": "function",
+        "name": "addVoters",
+        "stateMutability": "nonpayable",
+        "inputs": [
+            {
+                "name": "voters",
+                "type": "address[30]",
+                "components": null,
+                "internalType": null
+            }
+        ],
+        "outputs": []
+    },
+    {
+        "type": "function",
+        "name": "removeFromWhitelist",
+        "stateMutability": "nonpayable",
+        "inputs": [
+            {
+                "name": "addressesToRemove",
+                "type": "address[30]",
+                "components": null,
+                "internalType": null
+            }
+        ],
+        "outputs": []
+    },
+    {
+        "type": "function",
+        "name": "vote",
+        "stateMutability": "nonpayable",
+        "inputs": [
+            {
+                "name": "choice",
+                "type": "uint256",
+                "components": null,
+                "internalType": null
+            }
+        ],
+        "outputs": []
+    },
+    {
+        "type": "function",
+        "name": "changeOwner",
+        "stateMutability": "nonpayable",
+        "inputs": [
+            {
+                "name": "newOwner",
+                "type": "address",
+                "components": null,
+                "internalType": null
+            }
+        ],
+        "outputs": []
+    },
+    {
+        "type": "function",
+        "name": "getActiveProposal",
+        "stateMutability": "view",
+        "inputs": [],
+        "outputs": [
+            {
+                "name": "",
+                "type": "string",
+                "components": null,
+                "internalType": null
+            },
+            {
+                "name": "",
+                "type": "uint256[10]",
+                "components": null,
+                "internalType": null
+            },
+            {
+                "name": "",
+                "type": "bool",
+                "components": null,
+                "internalType": null
+            }
+        ]
+    },
+    {
+        "type": "function",
+        "name": "getLastVoteTime",
+        "stateMutability": "view",
+        "inputs": [
+            {
+                "name": "voter",
+                "type": "address",
+                "components": null,
+                "internalType": null
+            }
+        ],
+        "outputs": [
+            {
+                "name": "",
+                "type": "uint256",
+                "components": null,
+                "internalType": null
+            }
+        ]
+    },
+    {
+        "type": "function",
+        "name": "checkWinnerForProposal",
+        "stateMutability": "view",
+        "inputs": [
+            {
+                "name": "proposalId",
+                "type": "uint256",
+                "components": null,
+                "internalType": null
+            }
+        ],
+        "outputs": [
+            {
+                "name": "",
+                "type": "uint256",
+                "components": null,
+                "internalType": null
+            },
+            {
+                "name": "",
+                "type": "uint256",
+                "components": null,
+                "internalType": null
+            }
+        ]
+    },
+    {
+        "type": "function",
+        "name": "proposals",
+        "stateMutability": "view",
+        "inputs": [
+            {
+                "name": "arg0",
+                "type": "uint256",
+                "components": null,
+                "internalType": null
+            }
+        ],
+        "outputs": [
+            {
+                "name": "",
+                "type": "tuple",
+                "components": [
+                    {
+                        "name": "description",
+                        "type": "string",
+                        "components": null,
+                        "internalType": null
+                    },
+                    {
+                        "name": "votes",
+                        "type": "uint256[10]",
+                        "components": null,
+                        "internalType": null
+                    },
+                    {
+                        "name": "active",
+                        "type": "bool",
+                        "components": null,
+                        "internalType": null
+                    }
+                ],
+                "internalType": null
+            }
+        ]
+    },
+    {
+        "type": "function",
+        "name": "proposalCount",
+        "stateMutability": "view",
+        "inputs": [],
+        "outputs": [
+            {
+                "name": "",
+                "type": "uint256",
+                "components": null,
+                "internalType": null
+            }
+        ]
+    },
+    {
+        "type": "function",
+        "name": "activeProposalId",
+        "stateMutability": "view",
+        "inputs": [],
+        "outputs": [
+            {
+                "name": "",
+                "type": "uint256",
+                "components": null,
+                "internalType": null
+            }
+        ]
+    },
+    {
+        "type": "function",
+        "name": "whitelist",
+        "stateMutability": "view",
+        "inputs": [
+            {
+                "name": "arg0",
+                "type": "address",
+                "components": null,
+                "internalType": null
+            }
+        ],
+        "outputs": [
+            {
+                "name": "",
+                "type": "bool",
+                "components": null,
+                "internalType": null
+            }
+        ]
+    },
+    {
+        "type": "function",
+        "name": "lastVoteTime",
+        "stateMutability": "view",
+        "inputs": [
+            {
+                "name": "arg0",
+                "type": "address",
+                "components": null,
+                "internalType": null
+            }
+        ],
+        "outputs": [
+            {
+                "name": "",
+                "type": "uint256",
+                "components": null,
+                "internalType": null
+            }
+        ]
+    },
+    {
+        "type": "function",
+        "name": "owner",
+        "stateMutability": "view",
+        "inputs": [],
+        "outputs": [
+            {
+                "name": "",
+                "type": "address",
+                "components": null,
+                "internalType": null
+            }
+        ]
+    },
+    {
+        "type": "constructor",
+        "stateMutability": "nonpayable",
+        "inputs": []
+    }
+]
