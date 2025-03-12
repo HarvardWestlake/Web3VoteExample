@@ -118,6 +118,52 @@
       background-color: #3498db;
       margin-top: 5px;
     }
+    
+    /* GIF Gallery Styles */
+    .gif-gallery {
+      display: flex;
+      justify-content: space-around;
+      flex-wrap: wrap;
+      margin-top: 20px;
+      gap: 15px;
+    }
+    
+    .gif-container {
+      width: 30%;
+      min-width: 300px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      background-color: white;
+      text-align: center;
+    }
+    
+    .gif-container img {
+      width: 100%;
+      height: 200px;
+      object-fit: cover;
+      display: block;
+    }
+    
+    .gif-title {
+      padding: 10px;
+      font-weight: bold;
+      background-color: #f5f5f5;
+      border-top: 1px solid #eee;
+    }
+    
+    @media (max-width: 768px) {
+      .gif-container {
+        width: 45%;
+      }
+    }
+    
+    @media (max-width: 480px) {
+      .gif-container {
+        width: 100%;
+      }
+    }
   </style>
 </head>
 <body>
@@ -171,13 +217,6 @@
           <option value="1">Option 1</option>
           <option value="2">Option 2</option>
           <option value="3">Option 3</option>
-          <option value="4">Option 4</option>
-          <option value="5">Option 5</option>
-          <option value="6">Option 6</option>
-          <option value="7">Option 7</option>
-          <option value="8">Option 8</option>
-          <option value="9">Option 9</option>
-          <option value="10">Option 10</option>
         </select>
         <button id="voteButton" disabled>Vote</button>
       </div>
@@ -190,13 +229,32 @@
         <p>No proposals yet</p>
       </div>
     </div>
+
+    <!-- GIF Gallery Section -->
+    <div class="section">
+      <h2>Voting Options Illustrated</h2>
+      <div class="gif-gallery">
+        <div class="gif-container">
+          <img src="gifs/1.gif" alt="Option 1">
+          <div class="gif-title">Option 1</div>
+        </div>
+        <div class="gif-container">
+          <img src="gifs/2.gif" alt="Option 2">
+          <div class="gif-title">Option 2</div>
+        </div>
+        <div class="gif-container">
+          <img src="gifs/3.gif" alt="Option 3">
+          <div class="gif-title">Option 3</div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Load Latest Ethers.js v6 from CDN -->
   <script src="ethers.min.js" type="application/javascript"></script>
   <script>
     // Contract details
-    let contractAddress = "0x7526fd3d0B82e6167BC5Ea0763106ad21B34d9e7"; // Updated contract address
+    let contractAddress = "0x36676ec614f9a665b4a809cdf5992b8dbb17b2b6"; // Updated contract address
     const contractOwner = "0xCcD83cb05aAaf714289b226eC437B2Cf0C9f3a89";
     
     // Variables for contract interaction
