@@ -290,20 +290,70 @@
     async function loadABI() {
       try {
         statusElement.innerText = "Loading contract ABI...";
-        const response = await fetch('./contract/abi.json');
         
-        if (!response.ok) {
-          throw new Error(`HTTP error! Status: ${response.status}`);
+        // First try to fetch with absolute path
+        let response;
+        try {
+          response = await fetch('./contract/abi.json');
+          if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+          }
+        } catch (fetchError) {
+          console.warn("Failed to load ABI from ./contract/abi.json:", fetchError);
+          
+          // Try alternative path
+          try {
+            response = await fetch('../contract/abi.json');
+            if (!response.ok) {
+              throw new Error(`HTTP error with alternative path! Status: ${response.status}`);
+            }
+          } catch (altFetchError) {
+            console.warn("Failed to load ABI from ../contract/abi.json:", altFetchError);
+            
+            // Last resort: try to load from root
+            response = await fetch('/contract/abi.json');
+            if (!response.ok) {
+              throw new Error(`HTTP error with root path! Status: ${response.status}`);
+            }
+          }
         }
         
         abi = await response.json();
-        statusElement.innerText = "Contract ABI loaded successfully";
+        console.log("ABI loaded successfully:", abi.length, "entries");
+        
+        // Verify the ABI has required functions
+        const requiredFunctions = ['getActiveProposal', 'vote', 'proposals', 'activeProposalId'];
+        const missingFunctions = requiredFunctions.filter(func => 
+          !abi.some(entry => entry.name === func)
+        );
+        
+        if (missingFunctions.length > 0) {
+          console.warn("Loaded ABI is missing required functions:", missingFunctions);
+          statusElement.innerText = `Warning: ABI may be incomplete - missing ${missingFunctions.join(', ')}`;
+        } else {
+          statusElement.innerText = "Contract ABI loaded successfully";
+        }
         
         // Enable connect button once ABI is loaded
         connectButton.disabled = false;
       } catch (error) {
         console.error("Error loading ABI:", error);
-        statusElement.innerText = "Error loading ABI: " + error.message;
+        
+        // Display a more helpful error message and recovery options
+        const errorHTML = `
+          <div style="color: red; margin-top: 10px; padding: 10px; border: 1px solid red; background: #fff8f8;">
+            <p><strong>Error loading ABI:</strong> ${error.message}</p>
+            <p>Please check that:</p>
+            <ul>
+              <li>You're running this page from a web server (not just opening the HTML file directly)</li>
+              <li>The contract/abi.json file is in the correct location</li>
+              <li>Your web server has proper CORS settings enabled</li>
+            </ul>
+          </div>
+        `;
+        
+        document.querySelector('.section:first-of-type').insertAdjacentHTML('beforeend', errorHTML);
+        statusElement.innerText = "Error loading ABI file";
       }
     }
     
@@ -321,25 +371,34 @@
         totalVotes += parseInt(votes[i].toString());
       }
       
-      let html = `<div class="vote-options">`;
+      // Generate basic option list without vote counts initially
+      let html = `<div class="vote-options" id="vote-options-${proposalId}">`;
       
-      for (let i = 0; i < votes.length; i++) {
+      // Only display options 1-3 (indices 0-2)
+      const maxOptionsToShow = 3;
+      for (let i = 0; i < Math.min(maxOptionsToShow, votes.length); i++) {
         const voteCount = parseInt(votes[i].toString());
         if (voteCount === 0 && totalVotes === 0) continue; // Skip options with 0 votes when no votes cast
         
         const percentage = totalVotes > 0 ? (voteCount / totalVotes) * 100 : 0;
         const width = percentage > 0 ? percentage : 1; // Min 1% width for visibility
         
+        // Create option div with results hidden by default
         html += `
           <div class="vote-option">
             <div class="vote-option-label">Option ${i+1}:</div>
-            <div class="vote-bar" style="width: ${width}%"></div>
-            <div>${voteCount} votes (${percentage.toFixed(1)}%)</div>
+            <div class="vote-results" style="display: none;">
+              <div class="vote-bar" style="width: ${width}%"></div>
+              <div>${voteCount} votes (${percentage.toFixed(1)}%)</div>
+            </div>
           </div>
         `;
       }
       
       html += `</div>`;
+      
+      // Add view results button - initially hidden, will be shown if user has voted
+      html += `<button class="view-results-btn" id="view-results-${proposalId}" style="display: none;" onclick="toggleVoteResults(${proposalId})">View Results</button>`;
       
       // Add check winner button for completed proposals
       if (!isActive && totalVotes > 0) {
@@ -348,6 +407,50 @@
       
       return html;
     }
+    
+    // Function to toggle vote results visibility
+    function toggleVoteResults(proposalId) {
+      const resultsElements = document.querySelectorAll(`#vote-options-${proposalId} .vote-results`);
+      const button = document.getElementById(`view-results-${proposalId}`);
+      
+      // Toggle display of results
+      let isVisible = false;
+      resultsElements.forEach(el => {
+        if (el.style.display === 'none') {
+          el.style.display = 'flex';
+          isVisible = true;
+        } else {
+          el.style.display = 'none';
+          isVisible = false;
+        }
+      });
+      
+      // Update button text based on state
+      button.textContent = isVisible ? 'Hide Results' : 'View Results';
+    }
+    
+    // Function to check if user has voted and update button visibility
+    async function checkUserVoteStatus(proposalId) {
+      if (!contract || !userAddress) return;
+      
+      try {
+        // Get the last vote time for the user
+        const lastVoteTime = await contract.getLastVoteTime(userAddress);
+        const hasVoted = lastVoteTime.toString() !== "0";
+        
+        // Show view results button only if the user has voted
+        const viewResultsBtn = document.getElementById(`view-results-${proposalId}`);
+        if (viewResultsBtn) {
+          viewResultsBtn.style.display = hasVoted ? 'inline-block' : 'none';
+        }
+      } catch (error) {
+        console.error("Error checking user vote status:", error);
+      }
+    }
+    
+    // Make functions available globally
+    window.checkWinner = checkWinner;
+    window.toggleVoteResults = toggleVoteResults;
     
     // Add event listeners
     connectButton.addEventListener('click', connectWallet);
@@ -384,21 +487,47 @@
           signer = await provider.getSigner();
           userAddress = await signer.getAddress();
           
+          // Check the network and display information
+          const network = await provider.getNetwork();
+          console.log("Connected to network:", network);
+          statusElement.innerText = `Connected to ${network.name || 'chain ID ' + network.chainId}`;
+          
           // Create contract instance with write access
-          contract = new ethers.Contract(contractAddress, abi, signer);
+          try {
+            contract = new ethers.Contract(contractAddress, abi, signer);
+            console.log("Contract instance created successfully");
+          } catch (contractCreateError) {
+            console.error("Error creating contract instance:", contractCreateError);
+            statusElement.innerText = "Failed to create contract instance";
+            alert("Error connecting to contract. Please check your network and contract address.");
+            return;
+          }
           
           // Verify the contract exists
           try {
             // Try to call a view function to check if contract exists
             statusElement.innerText = "Verifying contract...";
             const code = await provider.getCode(contractAddress);
+            console.log(`Contract code at ${contractAddress}:`, code.length > 100 ? code.substring(0, 100) + "..." : code);
             
             if (code === '0x' || code === '0x0') {
               throw new Error("No contract deployed at the specified address. Please check your contract address.");
             }
             
+            // Verify ABI compatibility by calling a basic view function
+            try {
+              const count = await contract.proposalCount();
+              console.log("Proposal count:", count.toString());
+            } catch (abiError) {
+              console.error("ABI compatibility error:", abiError);
+              alert("The ABI doesn't seem to match the deployed contract. Check your ABI file.");
+              return;
+            }
+            
             // Check if user is the owner
             const ownerAddress = await contract.owner();
+            console.log("Contract owner:", ownerAddress);
+            console.log("Current user:", userAddress);
             isOwner = (ownerAddress.toLowerCase() === userAddress.toLowerCase());
             
             // Update UI
@@ -434,10 +563,12 @@
             // Check if user is whitelisted for voting
             if (!isOwner) {
               const isWhitelisted = await contract.whitelist(userAddress);
+              console.log("User whitelisted:", isWhitelisted);
               
               // Check voting cooldown
               if (isWhitelisted) {
                 const lastVoteTime = await contract.getLastVoteTime(userAddress);
+                console.log("Last vote time:", lastVoteTime.toString());
                 const currentTime = Math.floor(Date.now() / 1000); // Current time in seconds
                 const sevenDays = 7 * 24 * 60 * 60; // 7 days in seconds
                 
@@ -511,6 +642,7 @@
         let count;
         try {
           count = await contract.proposalCount();
+          console.log("Total proposal count:", count.toString());
         } catch (countError) {
           console.error("Error getting proposal count:", countError);
           
@@ -533,6 +665,7 @@
         let activeId;
         try {
           activeId = await contract.activeProposalId();
+          console.log("Active proposal ID from contract:", activeId.toString());
         } catch (error) {
           console.error("Error getting active proposal ID:", error);
           activeId = 0;
@@ -546,45 +679,95 @@
         // Loading message while we fetch proposals
         proposalsList.innerHTML = "";
         
-        // For non-owners, only show the active proposal if there is one
-        if (!isOwner && activeId.toString() !== "0") {
+        // For non-owners, check if there's an active proposal (including proposal 0)
+        if (!isOwner) {
           try {
+            console.log("Loading active proposal for non-owner, ID:", activeId.toString());
+            
+            // Get the proposal and check if it's actually active, regardless of ID
             const proposal = await contract.proposals(activeId);
-            const isActive = proposal[2]; // active status
+            console.log("Active proposal data:", proposal);
+            
+            // Extract proposal data carefully
+            let description, votes, isActive;
+            
+            // Check if the result is an array (old ethers) or an object (ethers v6)
+            if (Array.isArray(proposal)) {
+              [description, votes, isActive] = proposal;
+            } else if (proposal.description !== undefined) {
+              // Handle object format
+              description = proposal.description;
+              votes = proposal.votes;
+              isActive = proposal.active;
+            } else {
+              // Try to destructure the result as a tuple
+              description = proposal[0];
+              votes = proposal[1];
+              isActive = proposal[2];
+            }
+            
+            console.log("Parsed proposal details:", {
+              description: description,
+              isActive: isActive,
+              votes: Array.isArray(votes) ? votes.map(v => v.toString()) : "Not an array"
+            });
             
             if (isActive) {
-              // Only show active proposal for regular users
+              // Show active proposal for regular users
               const proposalDiv = document.createElement('div');
               proposalDiv.className = `proposal active`;
               proposalDiv.innerHTML = `
                 <h3>Current Vote: Proposal #${activeId}</h3>
-                <p>${proposal[0]}</p>
-                ${formatVotesDisplay(proposal[1], activeId, true)}
+                <p>${description}</p>
+                ${formatVotesDisplay(votes, activeId, true)}
               `;
               proposalsList.appendChild(proposalDiv);
+              
+              // Check if user has voted to show/hide results button
+              await checkUserVoteStatus(activeId);
             } else {
               proposalsList.innerHTML = "<p>No active proposals to vote on at the moment</p>";
             }
           } catch (error) {
             console.error(`Error loading active proposal:`, error);
-            proposalsList.innerHTML = "<p>Error loading active proposal</p>";
+            proposalsList.innerHTML = `<p>Error loading active proposal: ${error.message}</p>`;
           }
         } 
         // For owners, show all proposals
         else if (isOwner) {
+          console.log("Loading all proposals for owner");
           // Load each proposal
           for (let i = 0; i < count; i++) {
             try {
+              console.log(`Loading proposal #${i}`);
               const proposal = await contract.proposals(i);
-              const isActive = proposal[2]; // active status
+              console.log(`Proposal #${i} data:`, proposal);
+              
+              // Extract proposal data carefully
+              let description, votes, isActive;
+              
+              // Check if the result is an array (old ethers) or an object (ethers v6)
+              if (Array.isArray(proposal)) {
+                [description, votes, isActive] = proposal;
+              } else if (proposal.description !== undefined) {
+                // Handle object format
+                description = proposal.description;
+                votes = proposal.votes;
+                isActive = proposal.active;
+              } else {
+                // Try to destructure the result as a tuple
+                description = proposal[0];
+                votes = proposal[1];
+                isActive = proposal[2];
+              }
               
               // Add to proposals list
               const proposalDiv = document.createElement('div');
               proposalDiv.className = `proposal ${isActive ? 'active' : 'completed'}`;
               proposalDiv.innerHTML = `
                 <h3>Proposal #${i}</h3>
-                <p>${proposal[0]}</p>
-                ${formatVotesDisplay(proposal[1], i, isActive)}
+                <p>${description}</p>
+                ${formatVotesDisplay(votes, i, isActive)}
                 <p>Status: ${isActive ? 'Active' : 'Inactive'}</p>
               `;
               proposalsList.appendChild(proposalDiv);
@@ -592,7 +775,7 @@
               // Add to selector dropdown (for owner)
               const option = document.createElement('option');
               option.value = i;
-              option.textContent = `Proposal #${i}: ${proposal[0].substring(0, 30)}${proposal[0].length > 30 ? '...' : ''}`;
+              option.textContent = `Proposal #${i}: ${description.substring(0, 30)}${description.length > 30 ? '...' : ''}`;
               if (isActive) {
                 option.textContent += " (Active)";
               }
@@ -601,7 +784,7 @@
               console.error(`Error loading proposal ${i}:`, error);
               const proposalDiv = document.createElement('div');
               proposalDiv.className = 'proposal';
-              proposalDiv.innerHTML = `<h3>Proposal #${i}</h3><p>Error loading proposal details</p>`;
+              proposalDiv.innerHTML = `<h3>Proposal #${i}</h3><p>Error loading proposal details: ${error.message}</p>`;
               proposalsList.appendChild(proposalDiv);
             }
           }
@@ -660,33 +843,107 @@
     // Check active proposal
     async function checkActiveProposal() {
       try {
+        // Add debug information to the UI to help troubleshoot
+        statusElement.innerText = "Checking active proposal...";
+        
         const activeId = await contract.activeProposalId();
+        console.log("Active proposal ID:", activeId.toString());
         
-        if (activeId.toString() === "0" && (await contract.proposalCount()).toString() === "0") {
-          activeProposal.innerHTML = "<p>No active proposal</p>";
+        // Instead of checking if activeId is 0, check if the proposal exists and is active
+        // First, check if there are any proposals
+        const proposalCount = await contract.proposalCount();
+        if (proposalCount.toString() === "0") {
+          console.log("No proposals exist yet");
+          activeProposal.innerHTML = "<p>No proposals have been created yet</p>";
           voteOptionsContainer.style.display = "none";
           voteButton.disabled = true;
           return;
         }
         
-        // Get active proposal details
-        const [description, votes, isActive] = await contract.getActiveProposal();
-        
-        if (!isActive) {
-          activeProposal.innerHTML = "<p>No active proposal at the moment</p>";
-          voteOptionsContainer.style.display = "none";
-          voteButton.disabled = true;
-          return;
+        // Now check if the active proposal exists and is actually active
+        try {
+          console.log("Calling getActiveProposal()");
+          const rawResult = await contract.getActiveProposal();
+          console.log("getActiveProposal raw result:", rawResult);
+          
+          // Use the helper function to decode
+          const result = decodeActiveProposal(rawResult);
+          console.log("Decoded active proposal:", result);
+          
+          if (!result.isActive) {
+            console.log("Proposal marked as inactive");
+            activeProposal.innerHTML = "<p>No active proposal at the moment</p>";
+            voteOptionsContainer.style.display = "none";
+            voteButton.disabled = true;
+            return;
+          }
+          
+          // Update UI with proposal details
+          activeProposal.innerHTML = `
+            <h3>Current Vote:</h3>
+            <p>${result.description}</p>
+            ${formatVotesDisplay(result.votes, activeId, true)}
+          `;
+          
+          // Check if user has voted to show/hide results button
+          await checkUserVoteStatus(activeId);
+          
+          // Update vote options dropdown based on the proposal
+          updateVoteOptions(result.description);
+          
+          // Show voting options
+          voteOptionsContainer.style.display = "block";
+        } catch (innerError) {
+          console.error("Error getting active proposal details:", innerError);
+          
+          // Try alternative approach: directly fetch the proposal
+          try {
+            console.log("Trying alternative approach to get active proposal...");
+            const proposal = await contract.proposals(activeId);
+            console.log("Direct proposal data:", proposal);
+            
+            let description, votes, isActive;
+            
+            // Extract the data
+            if (Array.isArray(proposal)) {
+              [description, votes, isActive] = proposal;
+            } else if (proposal.description !== undefined) {
+              description = proposal.description;
+              votes = proposal.votes;
+              isActive = proposal.active;
+            } else {
+              description = proposal[0];
+              votes = proposal[1];
+              isActive = proposal[2];
+            }
+            
+            if (isActive) {
+              activeProposal.innerHTML = `
+                <h3>Current Vote:</h3>
+                <p>${description}</p>
+                ${formatVotesDisplay(votes, activeId, true)}
+              `;
+              
+              updateVoteOptions(description);
+              voteOptionsContainer.style.display = "block";
+            } else {
+              activeProposal.innerHTML = "<p>No active proposal at the moment</p>";
+              voteOptionsContainer.style.display = "none";
+              voteButton.disabled = true;
+            }
+          } catch (fallbackError) {
+            console.error("Both methods failed to get active proposal:", fallbackError);
+            activeProposal.innerHTML = `<p>Error retrieving proposal details: ${innerError.message}</p>`;
+            voteOptionsContainer.style.display = "none";
+            voteButton.disabled = true;
+            return;
+          }
         }
         
-        activeProposal.innerHTML = `
-          <h3>Current Vote:</h3>
-          <p>${description}</p>
-          ${formatVotesDisplay(votes, activeId, true)}
-        `;
-        
-        // Show voting options
-        voteOptionsContainer.style.display = "block";
+        // Show debug button for administrators
+        if (isOwner) {
+          document.getElementById('debugButton').style.display = 'inline-block';
+        }
         
         // Check if user is whitelisted and not in cooldown
         if (userAddress) {
@@ -698,7 +955,7 @@
             const sevenDays = 7 * 24 * 60 * 60; // 7 days in seconds
             
             const canVoteNow = lastVoteTime.toString() === "0" || 
-                               currentTime >= parseInt(lastVoteTime.toString()) + sevenDays;
+                              currentTime >= parseInt(lastVoteTime.toString()) + sevenDays;
             
             voteButton.disabled = !canVoteNow || voteOptionSelect.value === "";
             
@@ -711,11 +968,65 @@
             activeProposal.innerHTML += "<p>You are not whitelisted to vote. Please contact your instructor.</p>";
           }
         }
+        
+        statusElement.innerText = "Active proposal loaded successfully";
       } catch (error) {
         console.error("Error checking active proposal:", error);
-        activeProposal.innerHTML = "<p>Error checking active proposal</p>";
+        activeProposal.innerHTML = `<p>Error checking active proposal: ${error.message}</p>`;
         voteOptionsContainer.style.display = "none";
+        statusElement.innerText = "Error loading active proposal";
       }
+    }
+    
+    // Add helper function to update vote options based on proposal description
+    function updateVoteOptions(description) {
+      // Clear all existing options
+      voteOptionSelect.innerHTML = "";
+      
+      // Add the default "Select an option" choice
+      const defaultOption = document.createElement('option');
+      defaultOption.value = "";
+      defaultOption.textContent = "Select an option";
+      voteOptionSelect.appendChild(defaultOption);
+      
+      console.log("Parsing options from description:", description);
+      
+      // Try multiple regex patterns to find numbers that could be options
+      let optionNumbers = [];
+      
+      // First try to find patterns like "1 2 or 3", "1, 2, or 3", etc.
+      const matchWithSeparators = description;
+      optionNumbers = description.match(/\d+/g);
+
+      // If we found options in the text
+      if (optionNumbers && optionNumbers.length > 0) {
+        // For the specific contract we're working with, options should be 0-based
+        // But we need to check if they're already 0-based or 1-based in the description
+        
+        // Add each found option
+        for (const num of optionNumbers) {
+          // We'll keep the displayed values as 1, 2, 3 for user-friendliness
+          const optionValue = parseInt(num);
+          
+          const option = document.createElement('option');
+          option.value = optionValue.toString();
+          option.textContent = `Option ${optionValue}`;
+          voteOptionSelect.appendChild(option);
+          
+          console.log(`Added option: value=${option.value}, text=${option.textContent}`);
+        }
+      } else {
+        // If no options were found in the description, use default options 1-3
+        console.log("No options found in description, using defaults");
+        for (let i = 1; i <= 3; i++) {
+          const option = document.createElement('option');
+          option.value = i.toString();
+          option.textContent = `Option ${i}`;
+          voteOptionSelect.appendChild(option);
+        }
+      }
+      
+      console.log("Final vote options:", Array.from(voteOptionSelect.options).map(o => ({value: o.value, text: o.textContent})));
     }
     
     // Enable/disable vote button based on option selection
@@ -900,10 +1211,24 @@
           return;
         }
         
+        // Parse the selected option value and send directly to the contract
+        const optionValue = parseInt(selectedOption);
+        
+        console.log(`Voting for option ${optionValue} (sending directly to contract)`);
+        
         statusElement.innerText = "Submitting vote...";
-        const tx = await contract.vote(parseInt(selectedOption));
+        const tx = await contract.vote(optionValue);
         await tx.wait();
-        statusElement.innerText = "Vote submitted successfully for option " + selectedOption + "!";
+        statusElement.innerText = `Vote submitted successfully for Option ${optionValue}!`;
+        
+        // Get the active proposal ID to show the results button
+        const activeId = await contract.activeProposalId();
+        
+        // Show the view results button after successful vote
+        const viewResultsBtn = document.getElementById(`view-results-${activeId}`);
+        if (viewResultsBtn) {
+          viewResultsBtn.style.display = 'inline-block';
+        }
         
         // Clear selection
         voteOptionSelect.value = "";
@@ -918,8 +1243,193 @@
       }
     }
     
-    // Make the checkWinner function globally available
-    window.checkWinner = checkWinner;
+    // Add a test button for debugging
+    const debugButton = document.createElement('button');
+    debugButton.id = 'debugButton';
+    debugButton.textContent = 'Debug Contract Call';
+    debugButton.style.backgroundColor = '#ff9800';
+    debugButton.style.display = 'none'; // Hidden by default
+    document.querySelector('.section:first-of-type').appendChild(debugButton);
+    debugButton.addEventListener('click', testGetActiveProposal);
+
+    // Function to test getActiveProposal directly
+    async function testGetActiveProposal() {
+      try {
+        statusElement.innerText = "Testing getActiveProposal directly...";
+        
+        // Get the active proposal ID first
+        const activeId = await contract.activeProposalId();
+        console.log("Active proposal ID:", activeId.toString());
+        
+        // Check if we have any proposals
+        const proposalCount = await contract.proposalCount();
+        console.log("Total proposal count:", proposalCount.toString());
+        
+        if (proposalCount.toString() === "0") {
+          statusElement.innerText = "No proposals exist yet";
+          return;
+        }
+        
+        // Even if activeId is 0, we'll test it as a valid proposal
+        console.log(`Testing proposal #${activeId.toString()} to see if it's active...`);
+        
+        // Try both methods of getting the proposal
+        // Method 1: Call getActiveProposal
+        console.log("Method 1: Calling getActiveProposal directly...");
+        let rawResult, decodedResult;
+        try {
+          rawResult = await contract.getActiveProposal();
+          console.log("Raw getActiveProposal result:", rawResult);
+          decodedResult = decodeActiveProposal(rawResult);
+          console.log("Decoded active proposal:", decodedResult);
+        } catch (method1Error) {
+          console.error("Method 1 failed:", method1Error);
+        }
+        
+        // Method 2: Get the proposal directly
+        console.log("Method 2: Getting proposal directly...");
+        let directProposal, directResult;
+        try {
+          directProposal = await contract.proposals(activeId);
+          console.log("Direct proposal result:", directProposal);
+          
+          // Decode the direct proposal
+          if (Array.isArray(directProposal)) {
+            directResult = {
+              description: directProposal[0],
+              votes: Array.isArray(directProposal[1]) ? 
+                directProposal[1].map(v => typeof v === 'object' ? v.toString() : v) : [],
+              isActive: !!directProposal[2]
+            };
+          } else if (directProposal.description !== undefined) {
+            directResult = {
+              description: directProposal.description,
+              votes: Array.isArray(directProposal.votes) ? 
+                directProposal.votes.map(v => typeof v === 'object' ? v.toString() : v) : [],
+              isActive: !!directProposal.active
+            };
+          } else {
+            directResult = {
+              description: directProposal[0] || "",
+              votes: Array.isArray(directProposal[1]) ? 
+                directProposal[1].map(v => typeof v === 'object' ? v.toString() : v) : [],
+              isActive: !!directProposal[2]
+            };
+          }
+          console.log("Decoded direct proposal:", directResult);
+        } catch (method2Error) {
+          console.error("Method 2 failed:", method2Error);
+        }
+        
+        // Show the results in the UI for debugging
+        const debugInfo = document.createElement('div');
+        debugInfo.id = 'debugInfo';
+        debugInfo.style.backgroundColor = '#f8f8f8';
+        debugInfo.style.border = '1px solid #ddd';
+        debugInfo.style.padding = '10px';
+        debugInfo.style.marginTop = '20px';
+        debugInfo.style.whiteSpace = 'pre-wrap';
+        debugInfo.style.fontFamily = 'monospace';
+        
+        const method1Html = rawResult ? 
+          `<p><strong>Raw result type:</strong> ${typeof rawResult}</p>
+           <p><strong>Description:</strong> ${decodedResult.description}</p>
+           <p><strong>Is Active:</strong> ${decodedResult.isActive}</p>
+           <p><strong>Votes:</strong> ${JSON.stringify(decodedResult.votes)}</p>` 
+          : '<p>Method failed - see console for details</p>';
+          
+        const method2Html = directProposal ? 
+          `<p><strong>Raw result type:</strong> ${typeof directProposal}</p>
+           <p><strong>Description:</strong> ${directResult.description}</p>
+           <p><strong>Is Active:</strong> ${directResult.isActive}</p>
+           <p><strong>Votes:</strong> ${JSON.stringify(directResult.votes)}</p>` 
+          : '<p>Method failed - see console for details</p>';
+          
+        const recommendation = directProposal && directResult.isActive
+          ? 'This proposal is active and should be displayed' 
+          : 'This proposal does not appear to be active';
+        
+        debugInfo.innerHTML = `
+          <h3>Debug Info: Proposal #${activeId.toString()}</h3>
+          <p><strong>Proposal Count:</strong> ${proposalCount.toString()}</p>
+          
+          <h4>Method 1: getActiveProposal()</h4>
+          ${method1Html}
+          
+          <h4>Method 2: proposals(${activeId.toString()})</h4>
+          ${method2Html}
+          
+          <h4>Recommendation</h4>
+          <p>${recommendation}</p>
+        `;
+        
+        // Add or replace debug info
+        const existingDebug = document.getElementById('debugInfo');
+        if (existingDebug) {
+          existingDebug.parentNode.replaceChild(debugInfo, existingDebug);
+        } else {
+          document.querySelector('.container').appendChild(debugInfo);
+        }
+        
+        statusElement.innerText = "Debug test complete. Check console for details.";
+      } catch (error) {
+        console.error("Error testing getActiveProposal:", error);
+        statusElement.innerText = "Error testing getActiveProposal: " + error.message;
+      }
+    }
+
+    // Helper function to decode the active proposal data consistently
+    function decodeActiveProposal(rawResult) {
+      try {
+        console.log("Decoding proposal data:", rawResult);
+        
+        // Default values
+        let description = "";
+        let votes = [];
+        let isActive = false;
+        
+        // Handle different return formats
+        if (Array.isArray(rawResult)) {
+          // Format: [description, votes, isActive]
+          description = rawResult[0];
+          votes = Array.isArray(rawResult[1]) ? 
+            rawResult[1].map(v => typeof v === 'object' ? v.toString() : v) : 
+            [];
+          isActive = !!rawResult[2]; // Convert to boolean
+        } else if (typeof rawResult === 'object') {
+          // Handle object format (ethers v6 sometimes returns structs as objects)
+          if (rawResult.description !== undefined) {
+            description = rawResult.description;
+            votes = Array.isArray(rawResult.votes) ? 
+              rawResult.votes.map(v => typeof v === 'object' ? v.toString() : v) : 
+              [];
+            isActive = !!rawResult.active;
+          } else {
+            // Try to access by numeric index (tuple format)
+            description = rawResult[0] || "";
+            votes = Array.isArray(rawResult[1]) ? 
+              rawResult[1].map(v => typeof v === 'object' ? v.toString() : v) : 
+              [];
+            isActive = !!rawResult[2];
+          }
+        } else {
+          console.error("Unexpected result format:", rawResult);
+        }
+        
+        return {
+          description,
+          votes,
+          isActive
+        };
+      } catch (decodeError) {
+        console.error("Error decoding proposal data:", decodeError);
+        return {
+          description: "Error decoding data",
+          votes: [],
+          isActive: false
+        };
+      }
+    }
     
     // Initialize the application
     init();
